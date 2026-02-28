@@ -11,8 +11,7 @@ async function createUser({ name, role, isActive }) {
 }
 
 async function getUserByRole(role) {
-    const user = await User.findOne({ where: { role: role } });
-
+    const user = await User.findOne({ role: role });
     return user;
 }
 
