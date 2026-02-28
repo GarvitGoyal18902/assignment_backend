@@ -1,11 +1,13 @@
 const crypto = require('crypto');
 const Poll = require('../models/Poll');
+const connectDB = require('../lib/mongodb');
 
 function generateRoomId() {
     return crypto.randomBytes(4).toString('hex'); // 8-char room id
 }
 
 async function createPoll({ question, options, timeLimit, createdBy }) {
+    await connectDB();
     const roomId = generateRoomId();
 
     const poll = await Poll.create({
@@ -21,6 +23,7 @@ async function createPoll({ question, options, timeLimit, createdBy }) {
 }
 
 async function startPoll(pollId) {
+    await connectDB();
     const poll = await Poll.findById(pollId);
     if (!poll) throw new Error('Poll not found');
 
@@ -36,15 +39,18 @@ async function startPoll(pollId) {
 }
 
 async function completePoll(pollId) {
+    await connectDB();
     const poll = await Poll.findByIdAndUpdate(pollId, { status: 'completed', endTime: new Date() }, { new: true });
     return poll;
 }
 
 async function getPollById(pollId) {
+    await connectDB();
     return Poll.findById(pollId).lean();
 }
 
 async function incrementVoteCount(pollId, optionIndex) {
+    await connectDB();
     const poll = await Poll.findById(pollId);
     if (!poll) throw new Error('Poll not found');
     if (!poll.options[optionIndex]) throw new Error('Invalid option index');

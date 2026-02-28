@@ -1,7 +1,9 @@
 const Vote = require('../models/Vote');
 const { incrementVoteCount } = require('./pollService');
+const connectDB = require('../lib/mongodb');
 
 async function recordVote({ pollId, studentId, studentName, selectedOptionIndex }) {
+    await connectDB();
     const vote = await Vote.create({
         pollId,
         studentId,
@@ -14,6 +16,7 @@ async function recordVote({ pollId, studentId, studentName, selectedOptionIndex 
 }
 
 async function getPollResults(pollId) {
+    await connectDB();
     const votes = await Vote.find({ pollId }).lean();
 
     const counts = {};
