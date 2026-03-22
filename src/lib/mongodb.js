@@ -13,6 +13,8 @@ if (!cached) {
 }
 
 async function connectDB() {
+    // console.log("using database :::  ")
+    // console.log(process.env.MONGODB_URI)
     if (cached.conn) {
         return cached.conn;
     }

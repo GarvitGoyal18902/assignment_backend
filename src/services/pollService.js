@@ -8,7 +8,7 @@ function generateRoomId() {
 
 async function createPoll({ question, options, timeLimit, createdBy }) {
     await connectDB();
-    const roomId = generateRoomId();
+    const roomId = 'room';
 
     const poll = await Poll.create({
         question,
@@ -49,6 +49,33 @@ async function getPollById(pollId) {
     return Poll.findById(pollId).lean();
 }
 
+async function getPollByRoomAndStatus(roomId, status) {
+    await connectDB();
+
+    if (!roomId || !status) {
+        throw new Error('Both roomId and status are required');
+    }
+
+    return Poll.findOne({ roomId, status }).lean();
+}
+
+async function getCompletedPolls(roomId) {
+    await connectDB();
+    if (!roomId) {
+        throw new Error('roomId is required');
+    }
+
+    try {
+        const polls = await Poll.find({ roomId, status: 'completed' }).sort({ endTime: -1 }).lean();
+        return polls;
+    } catch (err) {
+        console.error('Error fetching completed polls:', err);
+        throw new Error('Failed to fetch completed polls');
+    }
+}
+
+
+
 async function incrementVoteCount(pollId, optionIndex) {
     await connectDB();
     const poll = await Poll.findById(pollId);
@@ -66,5 +93,7 @@ module.exports = {
     startPoll,
     completePoll,
     getPollById,
-    incrementVoteCount
+    incrementVoteCount,
+    getPollByRoomAndStatus,
+    getCompletedPolls,
 };

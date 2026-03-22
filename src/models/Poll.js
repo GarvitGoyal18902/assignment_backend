@@ -49,8 +49,7 @@ const pollSchema = new mongoose.Schema(
         },
         roomId: {
             type: String,
-            required: true,
-            unique: true // Each poll has unique room for socket.io
+            required: true
         }
     },
     {

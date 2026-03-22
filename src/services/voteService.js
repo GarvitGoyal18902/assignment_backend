@@ -1,6 +1,7 @@
 const Vote = require('../models/Vote');
 const { incrementVoteCount } = require('./pollService');
 const connectDB = require('../lib/mongodb');
+const mongoose = require('mongoose');
 
 async function recordVote({ pollId, studentId, studentName, selectedOptionIndex }) {
     await connectDB();
@@ -27,7 +28,22 @@ async function getPollResults(pollId) {
     return counts;
 }
 
+async function getVoteByPollAndStudent(pollId, studentName) {
+    if (!mongoose.Types.ObjectId.isValid(pollId)) {
+        throw new Error('Invalid pollId');
+    }
+
+    const vote = await Vote.findOne({
+        pollId: pollId,
+        studentName: studentName
+    }).exec();
+
+    return vote; // either the document or null
+}
+
+
 module.exports = {
     recordVote,
-    getPollResults
+    getPollResults,
+    getVoteByPollAndStudent
 };

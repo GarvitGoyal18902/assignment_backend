@@ -32,6 +32,6 @@ const voteSchema = new mongoose.Schema(
 );
 
 // Prevent duplicate votes (same student, same poll)
-voteSchema.index({ pollId: 1, studentId: 1 }, { unique: true });
+voteSchema.index({ pollId: 1, studentName: 1 }, { unique: true });
 
 module.exports = mongoose.model('Vote', voteSchema);

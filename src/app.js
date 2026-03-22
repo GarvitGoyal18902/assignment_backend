@@ -2,7 +2,8 @@ const express = require('express');
 const cors = require('cors');
 
 const pollRoutes = require('./routes/pollRoutes');
-
+const chatRoutes = require('./routes/chatRoutes');
+const studentRoutes = require('./routes/studentRoutes');
 const app = express();
 
 app.use(
@@ -18,11 +19,10 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/api/polls', pollRoutes);
+app.use('/api/chats', chatRoutes);
+app.use('/api/students', studentRoutes);
 
-// Generic error handler
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-    // eslint-disable-next-line no-console
     console.error(err);
     res.status(500).json({ message: 'Internal server error' });
 });

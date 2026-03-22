@@ -1,4 +1,4 @@
-const { createPoll, getPollById } = require('../services/pollService');
+const { createPoll, getPollById, getCompletedPolls } = require('../services/pollService');
 const { createUser, getUserByRole } = require('../services/userService');
 
 async function createPollHandler(req, res, next) {
@@ -22,7 +22,7 @@ async function createPollHandler(req, res, next) {
             createdBy: teacher
         });
 
-        return res.status(201).json({
+        return res.status(200).json({
             pollId: poll._id,
             roomId: poll.roomId,
             timeLimit: poll.timeLimit,
@@ -45,7 +45,20 @@ async function getPollHandler(req, res, next) {
     }
 }
 
+async function getAllPolls(req, res, next) {
+    try {
+        const { roomId } = req.params;
+        const completedPolls = await getCompletedPolls(roomId);
+        // console.log(JSON.stringify(completedPolls, null, 2));
+        return res.json({ polls: completedPolls });
+    } catch (err) {
+        next(err);
+    }
+}
+
 module.exports = {
     createPollHandler,
-    getPollHandler
+    getPollHandler,
+    getAllPolls
 };
+
