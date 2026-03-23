@@ -39,16 +39,16 @@ async function getStudentByRoomId({ roomId }) {
 
 async function removeStudent({ studentName, roomId }) {
     await connectDB();
-    const student = await Student.findOne({
+    const student = await Student.findOneAndDelete({
         name: studentName,
         roomId,
         status: 'active'
     });
+
     if (!student) {
-        return null;
+        return null; 
     }
-    await Student.updateOne({ name: studentName, roomId }, { $set: { status: 'kicked' } });
-    return student.toObject();
+    return student.toObject(); 
 }
 
 async function allowStudent({ studentName, roomId }) {

@@ -3,40 +3,44 @@ const { Server } = require('socket.io');
 const { startPoll, completePoll, getPollById, getPollByRoomAndStatus } = require('./services/pollService');
 const { recordVote, getVoteByPollAndStudent } = require('./services/voteService');
 const { createChat } = require('./services/chatService');
-const { createStudent, kickStudent, allowStudent } = require('./services/studentService');
+const { createStudent, kickStudent, allowStudent, removeStudent } = require('./services/studentService');
 const Student = require('./models/Student');
-const redisClient=require('./redis')
+const redisClient = require('./redis');
 
-const roomId = 'room';
+// Make pollTimers room+poll aware
 const pollTimers = new Map();
 
-function clearPollTimer(pollId) {
-    const existing = pollTimers.get(pollId);
+function clearPollTimer(roomId, pollId) {
+    const key = `${roomId}:${pollId}`;
+    const existing = pollTimers.get(key);
     if (existing) {
         clearInterval(existing.interval);
-        pollTimers.delete(pollId);
+        pollTimers.delete(key);
     }
 }
 
-async function startPollCountdown(io, pollId) {
+async function startPollCountdown(io, pollId, roomId) {
+    console.log('starting poll ', pollId, roomId);
     const poll = await startPoll(pollId);
     const endTime = poll.endTime.getTime();
-    clearPollTimer(pollId);
+    clearPollTimer(roomId, pollId);
+
+    const key = `${roomId}:${pollId}`;
     const interval = setInterval(async () => {
         const now = Date.now();
         const remaining = Math.max(0, Math.round((endTime - now) / 1000));
+        // console.log('tick')
+        io.to(roomId).emit('poll:tick', { pollId, remaining });
 
-        io.emit('poll:tick', { pollId, remaining });
-        console.log('tick');
         if (remaining <= 0) {
-            clearPollTimer(pollId);
+            clearPollTimer(roomId, pollId);
             await completePoll(pollId);
             const updated = await getPollById(pollId);
             io.to(roomId).emit('poll:ended', { pollId, poll: updated });
         }
     }, 1000);
 
-    pollTimers.set(pollId, { interval, endTime });
+    pollTimers.set(key, { interval, endTime });
 }
 
 function initSocket(server) {
@@ -45,52 +49,55 @@ function initSocket(server) {
     });
 
     io.on('connection', (socket) => {
-        // console.log('server socket created at.........', socket.id);
-
+        // Join room and store roomId in socket
         socket.on('connectToRoom', (roomId) => {
-            console.log('connected to roomId');
             socket.join(roomId);
+            socket.roomId = roomId;
         });
 
+        // Teacher joins room
         socket.on('teacher:join', async ({ pollId }) => {
-            // setting startime and endtime of poll
-            console.log('teacher Joined.............');
-
-            const poll = await getPollById(pollId);
-            if (!poll) {
-                socket.emit('poll:error', { message: `Poll not found ${pollId}` });
-                return;
-            }
-            await Poll.findByIdAndUpdate(pollId, { status: 'active' });
-
-            let remaining = poll.timeLimit;
-            if (poll.startTime && poll.endTime) {
-                const now = Date.now();
-                const endTime = new Date(poll.endTime).getTime();
-                remaining = Math.max(0, Math.round((endTime - now) / 1000));
-            }
-
-            io.to(roomId).emit('poll:stateForTeacher', {
-                role: 'teacher',
-                poll,
-                remaining
-            });
-        });
-
-        socket.on('teacher:start', async ({ pollId }) => {
             try {
-                console.log('teacher Started..........');
                 const poll = await getPollById(pollId);
                 if (!poll) {
-                    socket.emit('poll:error', { message: `Poll not found....,${pollId}` });
+                    socket.emit('poll:error', { message: `Poll not found ${pollId}` });
                     return;
                 }
-                console.log('poll started............');
-                await startPollCountdown(io, pollId);
-                console.log('sending poll started............');
+
+                await Poll.findByIdAndUpdate(pollId, { status: 'active' });
+
+                let remaining = poll.timeLimit;
+                if (poll.startTime && poll.endTime) {
+                    const now = Date.now();
+                    const endTime = new Date(poll.endTime).getTime();
+                    remaining = Math.max(0, Math.round((endTime - now) / 1000));
+                }
+
+                io.to(socket.roomId).emit('poll:stateForTeacher', {
+                    role: 'teacher',
+                    poll,
+                    remaining
+                });
+            } catch (err) {
+                console.error(err);
+                socket.emit('poll:error', { message: 'Failed teacher join' });
+            }
+        });
+
+        // Teacher starts poll
+        socket.on('teacher:start', async ({ pollId }) => {
+            try {
+                console.log('teacher:start');
+                const poll = await getPollById(pollId);
+                if (!poll) {
+                    socket.emit('poll:error', { message: `Poll not found ${pollId}` });
+                    return;
+                }
+
+                await startPollCountdown(io, pollId, socket.roomId);
 
                 const updated = await getPollById(pollId);
-                io.to(roomId).emit('poll:started', {
+                io.to(socket.roomId).emit('poll:started', {
                     pollId,
                     poll: updated
                 });
@@ -100,113 +107,29 @@ function initSocket(server) {
             }
         });
 
-        socket.on('student:whatsgoingon', async ({ studentName, roomId }) => {
-            const poll = await getPollByRoomAndStatus(roomId, 'active');
-            if (!poll) {
-                socket.emit('poll:error', { message: 'Poll not found..' });
-                return;
-            }
-            const studentVote = await getVoteByPollAndStudent(poll._id, studentName);
-            let choosen = 0,
-                choosenOption = '';
-            if (!studentVote) {
-                choosen = 0;
-            } else {
-                choosen = studentVote.selectedOptionIndex;
-                choosenOption = poll.options[choosen].text;
-            }
-            let remaining = poll.timeLimit;
-            if (poll.startTime && poll.endTime) {
-                const now = Date.now();
-                const endTime = new Date(poll.endTime).getTime();
-                remaining = Math.max(0, Math.round((endTime - now) / 1000));
-            }
-            console.log('emit poll:state');
-            socket.emit('poll:state', {
-                role: 'student',
-                poll,
-                remaining,
-                attempted: !!studentVote,
-                choosenOption
-            });
-        });
-
-        socket.on('teacher:whatsGoingOn', async (roomId) => {
-            const poll = await getPollByRoomAndStatus(roomId, 'active');
-            if (!poll) {
-                socket.emit('poll:noActive', { message: 'Poll not found..' });
-                return;
-            }
-            let remaining = poll.timeLimit;
-            if (poll.startTime && poll.endTime) {
-                const now = Date.now();
-                const endTime = new Date(poll.endTime).getTime();
-                remaining = Math.max(0, Math.round((endTime - now) / 1000));
-            }
-
-            socket.emit('poll:stateForTeacher', {
-                role: 'student',
-                poll,
-                remaining
-            });
-        });
-
-        socket.on('student:join', async ({ pollId, studentId, studentName }) => {
-            const poll = await getPollById(pollId);
-            if (!poll) {
-                socket.emit('poll:error', { message: 'Poll not found....' });
-                return;
-            }
-
-            const studentVote = await getVoteByPollAndStudent(poll._id, studentName);
-            let choosen = 0,
-                choosenOption = '';
-            if (!studentVote) {
-                choosen = 0;
-            } else {
-                choosen = studentVote.selectedOptionIndex;
-                choosenOption = poll.options[choosen].text;
-            }
-
-            let remaining = poll.timeLimit;
-            if (poll.startTime && poll.endTime) {
-                const now = Date.now();
-                const endTime = new Date(poll.endTime).getTime();
-                remaining = Math.max(0, Math.round((endTime - now) / 1000));
-            }
-
-            socket.emit('poll:state', {
-                role: 'student',
-                poll,
-                remaining,
-                attempted: !!studentVote,
-                choosenOption
-            });
-
-            socket.to(roomId).emit('student:joined', { pollId, studentId, studentName });
-        });
-
-        socket.on('student:vote', async ({ pollId, studentId, studentName, selectedOptionIndex }) => {
+        // Student requests current poll state
+        socket.on('student:whatsgoingon', async ({ studentName }) => {
             try {
-                const vote = await recordVote({ pollId, studentId, studentName, selectedOptionIndex });
-                console.log('student voted');
+                const roomId = socket.roomId;
+                const poll = await getPollByRoomAndStatus(roomId, 'active');
+                if (!poll) {
+                    socket.emit('poll:error', { message: 'Poll not found' });
+                    return;
+                }
 
-                console.log('poll:state after submit.............');
-
-                const poll = await getPollById(pollId);
                 const studentVote = await getVoteByPollAndStudent(poll._id, studentName);
                 let choosen = 0,
                     choosenOption = '';
-                if (!studentVote) {
-                    choosen = 0;
-                } else {
+                if (studentVote) {
                     choosen = studentVote.selectedOptionIndex;
                     choosenOption = poll.options[choosen].text;
                 }
-                const remaining = poll?.timeLimit
-                    ? Math.max(0, poll.timeLimit - Math.floor((Date.now() - new Date(poll.createdAt)) / 1000))
-                    : 0;
-                console.log(poll);
+
+                let remaining = poll.timeLimit;
+                if (poll.startTime && poll.endTime) {
+                    const now = Date.now();
+                    remaining = Math.max(0, Math.round((new Date(poll.endTime).getTime() - now) / 1000));
+                }
 
                 socket.emit('poll:state', {
                     role: 'student',
@@ -215,55 +138,145 @@ function initSocket(server) {
                     attempted: !!studentVote,
                     choosenOption
                 });
-                console.log('socket to updating teacher........', choosen);
-                // io.to(roomId).emit('poll:stateForTeacher', {
-                // role: 'student',
-                //     poll,
-                //     remaining`
-                // });
-                socket.to(roomId).emit('poll:voted', {
-                    choosen
+            } catch (err) {
+                console.error(err);
+                socket.emit('poll:error', { message: 'Failed fetching poll state' });
+            }
+        });
+
+        // Teacher checks poll state
+        socket.on('teacher:whatsGoingOn', async () => {
+            try {
+                const roomId = socket.roomId;
+                const poll = await getPollByRoomAndStatus(roomId, 'active');
+                if (!poll) {
+                    socket.emit('poll:noActive', { message: 'Poll not found' });
+                    return;
+                }
+
+                let remaining = poll.timeLimit;
+                if (poll.startTime && poll.endTime) {
+                    remaining = Math.max(0, Math.round((new Date(poll.endTime).getTime() - Date.now()) / 1000));
+                }
+
+                socket.emit('poll:stateForTeacher', {
+                    role: 'teacher',
+                    poll,
+                    remaining
                 });
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        // Student joins
+        socket.on('student:join', async ({ pollId, studentId, studentName }) => {
+            try {
+                const roomId = socket.roomId;
+                const poll = await getPollById(pollId);
+                if (!poll) {
+                    socket.emit('poll:error', { message: 'Poll not found' });
+                    return;
+                }
+
+                const studentVote = await getVoteByPollAndStudent(poll._id, studentName);
+                let choosen = 0,
+                    choosenOption = '';
+                if (studentVote) {
+                    choosen = studentVote.selectedOptionIndex;
+                    choosenOption = poll.options[choosen].text;
+                }
+
+                let remaining = poll.timeLimit;
+                if (poll.startTime && poll.endTime) {
+                    remaining = Math.max(0, Math.round((new Date(poll.endTime).getTime() - Date.now()) / 1000));
+                }
+
+                socket.emit('poll:state', {
+                    role: 'student',
+                    poll,
+                    remaining,
+                    attempted: !!studentVote,
+                    choosenOption
+                });
+
+                socket.to(roomId).emit('student:joined', { pollId, studentId, studentName });
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        // Student votes
+        socket.on('student:vote', async ({ pollId, studentId, studentName, selectedOptionIndex }) => {
+            try {
+                const roomId = socket.roomId;
+                await recordVote({ pollId, studentId, studentName, selectedOptionIndex });
+
+                const poll = await getPollById(pollId);
+                const studentVote = await getVoteByPollAndStudent(poll._id, studentName);
+
+                let choosen = 0,
+                    choosenOption = '';
+                if (studentVote) {
+                    choosen = studentVote.selectedOptionIndex;
+                    choosenOption = poll.options[choosen].text;
+                }
+
+                let remaining = poll.timeLimit;
+                if (poll.startTime && poll.endTime) {
+                    remaining = Math.max(0, Math.round((new Date(poll.endTime).getTime() - Date.now()) / 1000));
+                }
+
+                socket.emit('poll:state', {
+                    role: 'student',
+                    poll,
+                    remaining,
+                    attempted: !!studentVote,
+                    choosenOption
+                });
+
+                socket.to(roomId).emit('poll:voted', { choosen });
             } catch (err) {
                 console.error(err);
                 socket.emit('poll:error', { message: 'Unable to record vote' });
             }
         });
 
+        // Teacher ends poll early
         socket.on('teacher:askNewQuestion', async ({ pollId }) => {
             try {
-                console.log('terminating', pollId);
+                const roomId = socket.roomId;
                 await Poll.findByIdAndUpdate(pollId, {
                     endTime: new Date(),
                     status: 'completed'
                 });
-                console.log('poll interrupted and saved.............');
-                clearPollTimer(pollId);
+
+                clearPollTimer(roomId, pollId);
                 const updated = await getPollById(pollId);
-                io.to(roomId).emit('poll:ended', {
-                    pollId,
-                    poll: updated
-                });
+
+                io.to(roomId).emit('poll:ended', { pollId, poll: updated });
             } catch (err) {
                 console.error(err);
                 socket.emit('poll:error', { message: 'Failed to end poll' });
             }
         });
 
-        socket.on('chat:newMessage', async ({ roomId, sender, text, createdAt }) => {
+        // Chat messages
+        socket.on('chat:newMessage', async ({ sender, text, createdAt }) => {
             try {
-                console.log('inserting new chat ', sender, text);
-                const chat = createChat({ roomId, sender, text, createdAt });
+                const roomId = socket.roomId;
+                await createChat({ roomId, sender, text, createdAt });
                 socket.to(roomId).emit('chat:updateChat', { roomId, sender, text, createdAt });
             } catch (err) {
-                console.log(err);
+                console.error(err);
                 socket.emit('poll:error', { message: 'Failed chat creation' });
             }
         });
 
-        socket.on('student:come', async ({ studentName, roomId }) => {
+        // Student arrives
+        socket.on('student:come', async ({ studentName }) => {
             try {
-                console.log('student come');
+                const roomId = socket.roomId;
 
                 const existing = await Student.findOne({
                     name: studentName,
@@ -271,16 +284,9 @@ function initSocket(server) {
                     status: 'active'
                 });
 
-                if (existing) {
-                    console.log('student already present..........');
-                    return;
-                }
+                if (existing) return;
 
-                const student = await createStudent({
-                    studentName,
-                    roomId
-                });
-                console.log('student:updateStudents');
+                await createStudent({ studentName, roomId });
                 socket.to(roomId).emit('student:updateStudents', {
                     studentName,
                     roomId,
@@ -291,46 +297,61 @@ function initSocket(server) {
             }
         });
 
-        socket.on('student:kicked', async ({ studentName, roomId }) => {
+        socket.on('student:go', async ({ studentName }) => {
             try {
-                console.log('student:kicked');
+                const roomId = socket.roomId;
                 const existing = await Student.findOne({
                     name: studentName,
                     roomId,
                     status: 'active'
                 });
 
-                if (!existing) {
-                    console.log('student not active..........');
-                    return;
-                }
+                if (!existing) return;
 
-                const student = await kickStudent({
-                    studentName,
-                    roomId
+                await removeStudent({ studentName, roomId });
+                socket.to(roomId).emit('student:updateStudents', { studentName, roomId });
+            } catch (err) {
+                socket.emit('poll.error', { message: 'Failed student come event' });
+            }
+        });
+
+        // Kick student
+        socket.on('student:kicked', async ({ studentName }) => {
+            try {
+                const roomId = socket.roomId;
+
+                const existing = await Student.findOne({
+                    name: studentName,
+                    roomId,
+                    status: 'active'
                 });
-                console.log('student:kickStudents');
+
+                if (!existing) return;
+
+                await kickStudent({ studentName, roomId });
                 socket.to(roomId).emit('student:kickStudents', {
                     studentName,
                     roomId,
                     status: 'active'
                 });
             } catch (err) {
-                socket.emit('poll.error', { message: 'Failed student come event' });
+                socket.emit('poll.error', { message: 'Failed student kick event' });
             }
         });
 
-        socket.on('teacher:allowStudent', async ({ studentName, roomId }) => {
+        // Allow student
+        socket.on('teacher:allowStudent', async ({ studentName }) => {
             try {
-                console.log('allowing ')
-                let student=allowStudent({ studentName, roomId });
+                const roomId = socket.roomId;
+                await allowStudent({ studentName, roomId });
             } catch (err) {
                 socket.emit('poll.error', { message: 'Failed teacher:allowStudent' });
             }
         });
 
         socket.on('disconnect', () => {
-            console.log('Socket disconnected', socket.id);
+            // console.log('Socket disconnected', socket.id);
+            let temp = 1;
         });
     });
 
