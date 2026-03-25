@@ -3,13 +3,14 @@ const { createUser, getUserByRole } = require('../services/userService');
 
 async function createPollHandler(req, res, next) {
     try {
-        const { question, options, timeLimit, createdBy } = req.body;
+        const { question, options, timeLimit, roomId } = req.body;
 
         if (!question || !Array.isArray(options) || options.length < 2) {
             return res.status(400).json({ message: 'Question and at least two options are required.' });
         }
 
         let teacher = await getUserByRole('teacher');
+        console.log('miidleware completed ');
 
         if (!teacher) {
             teacher = await createUser({ name: 'Teacher', role: 'teacher', isActive: true });
@@ -19,7 +20,8 @@ async function createPollHandler(req, res, next) {
             question,
             options,
             timeLimit,
-            createdBy: teacher
+            createdBy: teacher,
+            roomId
         });
 
         return res.status(200).json({
@@ -61,4 +63,3 @@ module.exports = {
     getPollHandler,
     getAllPolls
 };
-

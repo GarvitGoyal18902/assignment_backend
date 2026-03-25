@@ -2,43 +2,27 @@ const connectDB = require('../lib/mongodb');
 const Student = require('../models/Student');
 const { redisClient } = require('../redis');
 
-async function createStudent({ roomId, studentName }) {
-    await connectDB();
-    let student = await Student.findOne({ name: studentName, roomId });
-    if (!student) {
-        student = new Student({ name: studentName, roomId, status: 'active' });
-        await student.save();
-    }
-    const key = `student:${roomId}:${studentName}`;
-    await redisClient.set(key, 'active');
-
-    return student;
-}
-
 async function kickStudent({ roomId, studentName }) {
-    await connectDB();
     const student = await Student.findOneAndUpdate(
         { name: studentName, roomId },
         { status: 'kicked' },
         { new: true }
     ).lean();
+    studentName= studentName.toLowerCase();
     const key = `student:${roomId}:${studentName}`;
     console.log('setting redis blocked ',roomId,studentName);
     await redisClient.set(key, 'blocked');
-    console.log(redisClient.get(key));
+    // console.log(redisClient.get(key));
 
     return student;
 }
 
 async function getStudentByRoomId({ roomId }) {
-    await connectDB();
     const students = await Student.find({ roomId }).lean();
-    console.log('end point ', students, roomId);
     return students;
 }
 
 async function removeStudent({ studentName, roomId }) {
-    await connectDB();
     const student = await Student.findOneAndDelete({
         name: studentName,
         roomId,
@@ -59,6 +43,7 @@ async function allowStudent({ studentName, roomId }) {
         roomId,
         status: 'kicked'
     });
+    studentName.toLowerCase();
     const key = `student:${roomId}:${studentName}`;
     await redisClient.set(key, 'active');
 
@@ -76,7 +61,6 @@ async function allowStudent({ studentName, roomId }) {
 }
 
 module.exports = {
-    createStudent,
     getStudentByRoomId,
     removeStudent,
     kickStudent,

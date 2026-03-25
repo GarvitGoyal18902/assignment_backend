@@ -6,9 +6,7 @@ function generateRoomId() {
     return crypto.randomBytes(4).toString('hex'); // 8-char room id
 }
 
-async function createPoll({ question, options, timeLimit, createdBy }) {
-    await connectDB();
-    const roomId = 'room';
+async function createPoll({ question, options, timeLimit, createdBy,roomId }) {
 
     const poll = await Poll.create({
         question,

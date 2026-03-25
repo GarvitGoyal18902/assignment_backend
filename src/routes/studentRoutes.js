@@ -1,9 +1,11 @@
 const express = require('express');
-const { getStudentByRoomId, getAllStudents, checkAllowed } = require('../controllers/studentController');
-
+const { getAllStudents,studentSignup,studentLogin} = require('../controllers/studentController');
+const { jwtAuthMiddleware } = require('../jwt');
 const router = express.Router();
-router.post('/checkallowed', checkAllowed);
-router.post('/:roomId', getAllStudents);
+
+router.get('/room/:roomId', jwtAuthMiddleware, getAllStudents);
+router.post('/signup', studentSignup);
+router.post('/login', studentLogin);
 
 
 module.exports = router;

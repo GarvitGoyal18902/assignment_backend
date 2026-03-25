@@ -7,7 +7,7 @@ async function getChatHandler(req, res, next) {
             return res.status(400).json({ message: 'False roomId for fetching Chat' });
         }
         let chats = await getChatByRoomId({ roomId });
-        return res.status(201).json({ chats });
+        return res.status(200).json({ chats });
     } catch (err) {
         next(err);
     }

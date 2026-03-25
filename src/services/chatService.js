@@ -2,14 +2,12 @@ const connectDB = require('../lib/mongodb');
 const Chat = require('../models/Chat');
 
 async function createChat({ roomId,sender,text,createdAt }) {
-    await connectDB();
     const chat = await Chat.create({
         roomId,
         sender,
         text,
         createdAt
-    });
-    return chat;
+    });  return chat;
 }
 
 async function getChatByRoomId({ roomId }) {
@@ -17,6 +15,7 @@ async function getChatByRoomId({ roomId }) {
     if (!roomId) {
         throw new Error('roomId is required');
     }
+    console.log('finding chat in roomId-> ' ,roomId)
     const messages = await Chat.find({ roomId }).sort({ createdAt: 1 }).lean(); // oldest → newest
      const formattedMessages = messages.map((msg) => ({
          sender: msg.sender,
