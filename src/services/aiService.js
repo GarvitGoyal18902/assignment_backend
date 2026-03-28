@@ -19,7 +19,7 @@ function extractJsonArray(text) {
 async function generateOptions(question) {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = `
-        Generate 4 short options for this poll question.
+        Generate 4 short options for this poll question , only one should be correct.
 
         Return only a JSON array of strings.
         Do not include markdown, numbering, explanation, or extra text.

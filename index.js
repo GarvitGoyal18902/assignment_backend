@@ -5,6 +5,19 @@ const { initSocket } = require('./src/socket');
 const connectDB=require('./src/lib/mongodb')
 const PORT = process.env.PORT || 5001;
 
+// const mongoose = require('mongoose');
+
+// async function dropIndex() {
+//     try {
+//         await mongoose.connection.collection('polls').dropIndex('roomId_1');
+//         console.log('Index dropped');
+//     } catch (err) {
+//         console.log('Index not found or already removed');
+//     }
+// }
+
+// dropIndex();
+
 async function start() {
     try {
         const server = http.createServer(app);
