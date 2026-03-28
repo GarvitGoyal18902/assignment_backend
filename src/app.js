@@ -5,10 +5,8 @@ const pollRoutes = require('./routes/pollRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const studentRoutes = require('./routes/studentRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
-const attachmentRoutes = require('./routes/attachmentRoutes');
 const {jwtAuthMiddleware,generateToken}=require('./jwt');
 const { teacherLogin } = require('./controllers/teacherController');
-const aiRoutes=require('./routes/aiRoutes')
 const app = express();
 
 app.use(
@@ -27,8 +25,6 @@ app.use('/api/polls',jwtAuthMiddleware, pollRoutes);
 app.use('/api/chats',jwtAuthMiddleware ,chatRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/teacher', teacherRoutes);
-app.use('/api/attachments', attachmentRoutes);
-app.use('/api/ai', aiRoutes);
 
 app.use((err, req, res, next) => {
     console.error(err);
