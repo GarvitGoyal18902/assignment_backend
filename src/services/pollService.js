@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const Poll = require('../models/Poll');
 const connectDB = require('../lib/mongodb');
+const { setDefaultCACertificates } = require('tls');
 
 function generateRoomId() {
     return crypto.randomBytes(4).toString('hex'); // 8-char room id
@@ -49,11 +50,12 @@ async function getPollById(pollId) {
 
 async function getPollByRoomAndStatus(roomId, status) {
     await connectDB();
-
+    // console.log('searching active for  ',roomId ,status)
     if (!roomId || !status) {
+        // console.log('returninf')
         throw new Error('Both roomId and status are required');
     }
-
+    
     return Poll.findOne({ roomId, status }).lean();
 }
 
