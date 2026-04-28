@@ -12,7 +12,8 @@ async function teacherLogin(req, res) {
         }
         const authPayload = {
             name: 'teacher',
-            roomId
+            roomId,
+            role:'teacher'
         };
         const token = generateToken(authPayload);
         return res.status(200).json({ token });

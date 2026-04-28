@@ -2,7 +2,7 @@ const { getStudentByRoomId } = require('../services/studentService');
 const { redisClient } = require('../redis');
 const Student = require('../models/Student');
 const { generateToken } = require('../../src/jwt');
-const {getIo}=require('../socket')
+const { getIo } = require('../socket');
 
 async function isStudentAllowed(studentName, roomId) {
     const key = `student:${roomId}:${studentName.toLowerCase()}`;
@@ -66,17 +66,16 @@ async function studentSignup(req, res) {
             });
         }
 
-        const existingEmail = await Student.findOne({ emailID });
+        const existingEmail = await Student.findOne({ emailID, roomId });
         if (existingEmail) {
             return res.status(400).json({
-                message: 'Email already registered'
+                message: 'Email already registered in the room'
             });
         }
 
-
         const newUser = new Student({ name, emailID, password, roomId });
         if (!roomId) {
-            res.status(400).json({message:'roomId missing at login'})
+            res.status(400).json({ message: 'roomId missing at login' });
         }
         const savedUser = await newUser.save();
         const io = getIo();
@@ -91,7 +90,8 @@ async function studentSignup(req, res) {
         const payload = {
             id: savedUser.id,
             name: savedUser.name,
-            roomId
+            roomId,
+            role:"student"
         };
 
         const token = generateToken(payload);
@@ -156,12 +156,13 @@ async function studentLogin(req, res) {
         const authPayload = {
             id: existing.id,
             name: existing.name,
-            roomId
+            roomId,
+            role:'student'
         };
 
         const io = getIo();
         io.to(roomId).emit('student:updateStudents', {
-            studentName:studentName,
+            studentName: studentName,
             roomId,
             status: 'active',
             password,

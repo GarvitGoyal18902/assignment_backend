@@ -23,8 +23,8 @@ app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 
-app.use('/api/polls',jwtAuthMiddleware, pollRoutes);
-app.use('/api/chats',jwtAuthMiddleware ,chatRoutes);
+app.use('/api/polls', pollRoutes);
+app.use('/api/chats' ,chatRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/teacher', teacherRoutes);
 app.use('/api/attachments', attachmentRoutes);
