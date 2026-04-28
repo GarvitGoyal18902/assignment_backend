@@ -1,6 +1,6 @@
 const express = require('express');
 const { getPollImages } = require('../controllers/attachmentController');
-const { jwtAuthMiddlewareTeacher } = require('../jwt');
+const { jwtAuthMiddleware } = require('../jwt');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
