@@ -1,9 +1,9 @@
 const { createClient } = require('redis');
 
-// const redisClient = createClient({
-//     url: process.env.poll_web_REDIS_URL
-// });
-const redisClient = createClient();
+const redisClient = createClient({
+    url: process.env.poll_web_REDIS_URL
+});
+// const redisClient = createClient();
 
 redisClient.on('error', (err) => {
     console.error('Redis error:', err);
