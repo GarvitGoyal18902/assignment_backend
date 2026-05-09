@@ -31,7 +31,8 @@ app.use('/api/teacher', teacherRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/ai', aiRoutes);
 
-app.get('*', (req, res) => {
+// fallback routing :
+app.use((req, res) => {
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ message: 'API route not found' });
     }
