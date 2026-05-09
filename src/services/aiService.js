@@ -41,8 +41,9 @@ function fallbackOptions(question) {
 }
 
 async function generateOptions(question) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash' });
-
+const model = genAI.getGenerativeModel({
+    model: 'gemini-3-flash-preview'
+});
     const prompt = `
         Generate 4 short options for this poll question. Only one should be correct.
 
